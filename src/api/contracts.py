@@ -6,6 +6,12 @@ Disse lever kun i API-grensesnittet: validering og (de)serialisering.
 from pydantic import BaseModel, Field
 
 
+class ErrorResponse(BaseModel):
+    """Standard feilrespons."""
+    error: str = Field(description="Feilkode")
+    detail: str | None = Field(default=None, description="Menneskelesbar forklaring")
+
+
 class Location(BaseModel):
     """En registrert lokasjon."""
     id: int
