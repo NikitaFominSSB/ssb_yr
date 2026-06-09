@@ -66,7 +66,7 @@ class PostgresLocationRepository(LocationRepository):
     async def delete(self, location_id: int) -> Location | None:
         row = await self._pool.fetchrow(
             "DELETE FROM locations WHERE id = $1 RETURNING id, name, lat, lon",
-            location_id,1
+            location_id,
         )
         return _to_location(row) if row is not None else None
 
