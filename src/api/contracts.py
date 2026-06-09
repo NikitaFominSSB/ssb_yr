@@ -51,10 +51,6 @@ class GetForecastsRequest(BaseModel):
     fresh: bool = False
 
 
-class GetForecastResponse(BaseModel):
-    forecast: Forecast
-
-
 class GetForecastsResponse(BaseModel):
     forecasts: list[Forecast]
 
