@@ -1,8 +1,13 @@
+import os
+
 from fastapi import FastAPI
 
 from api import fetch, forecasts, locations
 from repositories import InMemoryForecastRepository, InMemoryLocationRepository
-from weather import FakeWeatherForecastClient
+from weather import YrWeatherForecastClient
+
+# Yr krever User-Agent med kontaktinformasjon. Overstyres via miljøvariabel.
+_DEFAULT_USER_AGENT = "ssb-yr/1.0 nikita.s.fomin@gmail.com"
 
 
 def create_app() -> FastAPI:
@@ -13,7 +18,9 @@ def create_app() -> FastAPI:
     # Ikke den beste løsningen, det er bedre å injisere via Depends
     app.state.locations = InMemoryLocationRepository()
     app.state.forecasts = InMemoryForecastRepository()
-    app.state.weather = FakeWeatherForecastClient()
+    app.state.weather = YrWeatherForecastClient(
+        user_agent=os.environ.get("YR_USER_AGENT", _DEFAULT_USER_AGENT)
+    )
 
     @app.get("/health")
     async def health() -> dict[str, str]:
