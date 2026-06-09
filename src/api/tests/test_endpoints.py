@@ -4,18 +4,30 @@ import pytest
 from fastapi.testclient import TestClient
 
 from repositories import InMemoryForecastRepository, InMemoryLocationRepository
-from weather import FakeWeatherForecastClient
+from weather import FakeWeatherForecastClient, WeatherClientError, WeatherForecastClient
 from main import app
+
+
+class _FailsForLatWeatherClient(WeatherForecastClient):
+    """Feiler for én bestemt breddegrad, lykkes ellers — for å teste delvise feil."""
+
+    def __init__(self, fail_lat: float, temperature: float = 18.0) -> None:
+        self._fail_lat = fail_lat
+        self._temperature = temperature
+
+    async def fetch_temperature(self, lat: float, lon: float) -> float | None:
+        if lat == self._fail_lat:
+            raise WeatherClientError("kilden er nede for denne lokasjonen")
+        return self._temperature
 
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    """Ferske repositorier per test ved å sette app.state på nytt."""
+    """Ferske in-memory-repositorier per test. Uten lifespan (ingen DB) for determinisme."""
     app.state.locations = InMemoryLocationRepository()
     app.state.forecasts = InMemoryForecastRepository()
     app.state.weather = FakeWeatherForecastClient(temperature=18.0)
-    with TestClient(app) as c:
-        yield c
+    yield TestClient(app)
 
 
 def _create_oslo(client: TestClient) -> int:
@@ -51,6 +63,22 @@ def test_fetch_returns_updated_count(client: TestClient) -> None:
     body = resp.json()
     assert body["updated"] == 1
     assert body["failed"] == 0
+
+
+def test_fetch_isolates_per_location_failure(client: TestClient) -> None:
+    # To lokasjoner; kilden er nede for Bergen, men oppe for Oslo.
+    client.post("/locations", json={"name": "Oslo", "lat": 59.9, "lon": 10.7})
+    client.post("/locations", json={"name": "Bergen", "lat": 60.4, "lon": 5.3})
+    app.state.weather = _FailsForLatWeatherClient(fail_lat=60.4)
+
+    body = client.post("/fetch").json()
+    assert body["updated"] == 1
+    assert body["failed"] == 1
+    assert body["failures"][0]["name"] == "Bergen"
+
+    forecasts = client.get("/forecasts").json()["forecasts"]
+    assert len(forecasts) == 1
+    assert forecasts[0]["location_id"] == 1
 
 
 def test_forecasts_listed_after_fetch(client: TestClient) -> None:
